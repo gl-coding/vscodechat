@@ -24,6 +24,9 @@
     }, {
       "command": "hello-vscode.showFloatingInput",
       "title": "显示悬浮输入框"
+    }, {
+      "command": "hello-vscode.copilotDialog",
+      "title": "Copilot 风格对话框"
     }],
     "keybindings": [
       {
@@ -39,9 +42,15 @@
       },
       {
         "command": "hello-vscode.showFloatingInput",
-        "key": "ctrl+alt+i",
-        "mac": "cmd+alt+i",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
         "when": "editorHasSelection"
+      },
+      {
+        "command": "hello-vscode.copilotDialog",
+        "key": "ctrl+k",
+        "mac": "cmd+k",
+        "when": "editorTextFocus"
       }
     ]
   },

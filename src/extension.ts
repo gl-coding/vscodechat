@@ -37,10 +37,19 @@ export function activate(context: vscode.ExtensionContext) {
         FloatingInput.show(context);
     });
 
+    // 注册Copilot风格对话框命令
+    let copilotDialog = vscode.commands.registerCommand('hello-vscode.copilotDialog', () => {
+        const editor = vscode.window.activeTextEditor;
+        if (editor) {
+            CopilotDialog.show(editor);
+        }
+    });
+
     context.subscriptions.push(disposable);
     context.subscriptions.push(showSelection);
     context.subscriptions.push(openChat);
     context.subscriptions.push(floatingInput);
+    context.subscriptions.push(copilotDialog);
 }
 
 export function deactivate() {}
@@ -71,11 +80,19 @@ class ChatPanel {
         context.globalState.update('chatHistory', ChatPanel.currentPanel.chatHistory);
         ChatPanel.currentPanel.panel.dispose();
       } else {
-        ChatPanel.currentPanel.panel.reveal();
-        ChatPanel.currentPanel.restoreHistory();
+        ChatPanel.currentPanel.panel.reveal(undefined, true);
       }
       return;
     }
+
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+
+    const position = {
+      viewColumn: vscode.ViewColumn.Beside,
+      preserveFocus: true,
+      position: editor.selection.active
+    };
 
     const panel = vscode.window.createWebviewPanel(
       'aiChat',
@@ -83,12 +100,20 @@ class ChatPanel {
       vscode.ViewColumn.Beside,
       {
         enableScripts: true,
-        retainContextWhenHidden: true
+        retainContextWhenHidden: true,
       }
     );
 
     ChatPanel.currentPanel = new ChatPanel(panel, context);
     ChatPanel.currentPanel.restoreHistory();
+
+    panel.onDidChangeViewState(e => {
+      if (e.webviewPanel.active) {
+        // 获取焦点时的处理
+      } else {
+        // 失去焦点时的处理
+      }
+    });
   }
 
   private restoreHistory() {
@@ -332,10 +357,10 @@ class FloatingInput {
       const panel = vscode.window.createWebviewPanel(
         'floatingInput',
         '快速输入',
-        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+        vscode.ViewColumn.Beside,
         {
           enableScripts: true,
-          retainContextWhenHidden: false
+          retainContextWhenHidden: false,
         }
       );
 
@@ -371,16 +396,6 @@ class FloatingInput {
   }
 
   private getWebviewContent(): string {
-    const completions = ['function', 'const', 'let', 'var'];
-    const datalist = document.createElement('datalist');
-    datalist.id = 'completions';
-    completions.forEach(c => {
-      const option = document.createElement('option');
-      option.value = c;
-      datalist.appendChild(option);
-    });
-    document.body.appendChild(datalist);
-
     return `
       <!DOCTYPE html>
       <html>
@@ -445,5 +460,85 @@ class FloatingInput {
     this.selectedText = newText;
     this.position = newPosition;
     this.panel.webview.html = this.getWebviewContent();
+  }
+}
+
+class CopilotDialog {
+  private static instance: vscode.WebviewPanel | undefined;
+  private static context: vscode.ExtensionContext;
+
+  static show(editor: vscode.TextEditor) {
+    const selection = editor.selection;
+    const selectedText = editor.document.getText(selection) || 
+      editor.document.lineAt(selection.active.line).text;
+
+    if (CopilotDialog.instance) {
+      CopilotDialog.instance.reveal();
+      CopilotDialog.updateContent(selectedText);
+      return;
+    }
+
+    const panel = vscode.window.createWebviewPanel(
+      'copilotDialog',
+      'AI 助手',
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+      {
+        enableScripts: true,
+        retainContextWhenHidden: false
+      }
+    );
+
+    panel.webview.html = `
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>正在生成代码...</div>
+      </div>
+    `;
+    this.setupMessageHandler(panel, editor);
+    CopilotDialog.instance = panel;
+  }
+
+  private static setupMessageHandler(panel: vscode.WebviewPanel, editor: vscode.TextEditor) {
+    panel.webview.onDidReceiveMessage(async message => {
+      switch (message.command) {
+        case 'generate':
+          await this.handleGeneration(message.text, editor);
+          panel.dispose();
+          break;
+        case 'close':
+          panel.dispose();
+          break;
+      }
+    }, undefined, this.context.subscriptions);
+
+    panel.onDidDispose(() => {
+      CopilotDialog.instance = undefined;
+    });
+  }
+
+  private static async handleGeneration(prompt: string, editor: vscode.TextEditor) {
+    // 这里可以接入真实AI服务
+    const generatedCode = `// AI生成代码：${new Date().toLocaleTimeString()}\nfunction ${prompt.replace(/ /g, '_')}() {\n  // 自动生成代码\n}`;
+    
+    await editor.edit(editBuilder => {
+      editBuilder.replace(editor.selection, generatedCode);
+    });
+  }
+
+  private static updateContent(selectedText: string) {
+    if (this.instance) {
+      this.instance.webview.postMessage({
+        command: 'updateInput',
+        text: selectedText
+      });
+    }
+  }
+
+  // 根据代码上下文生成建议
+  private static generateSuggestions(code: string): string[] {
+    const suggestions = [];
+    if (code.includes('function')) suggestions.push('转换为箭头函数');
+    if (code.includes('for (')) suggestions.push('转换为map函数');
+    return suggestions;
   }
 } 
