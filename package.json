@@ -1,0 +1,60 @@
+{
+  "name": "hello-vscode",
+  "displayName": "Hello VSCode",
+  "description": "A simple VSCode extension",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [{
+      "command": "hello-vscode.helloWorld",
+      "title": "Hello World"
+    }, {
+      "command": "hello-vscode.showSelection",
+      "title": "显示选中内容"
+    }, {
+      "command": "hello-vscode.openChat",
+      "title": "打开AI对话框"
+    }],
+    "keybindings": [
+      {
+        "command": "hello-vscode.showSelection",
+        "key": "ctrl+alt+s",
+        "mac": "cmd+m",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "hello-vscode.openChat",
+        "key": "ctrl+alt+c",
+        "mac": "cmd+alt+c"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^16.18.34",
+    "@typescript-eslint/eslint-plugin": "^6.7.0",
+    "@typescript-eslint/parser": "^6.7.0",
+    "eslint": "^8.26.0",
+    "typescript": "^5.2.2"
+  },
+  "files": [
+    "dist",
+    "src/webview/**/*.html",
+    "src/webview/**/*.css",
+    "src/webview/**/*.js"
+  ]
+} 
