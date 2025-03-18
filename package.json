@@ -21,6 +21,9 @@
     }, {
       "command": "hello-vscode.openChat",
       "title": "打开AI对话框"
+    }, {
+      "command": "hello-vscode.showFloatingInput",
+      "title": "显示悬浮输入框"
     }],
     "keybindings": [
       {
@@ -33,6 +36,12 @@
         "command": "hello-vscode.openChat",
         "key": "ctrl+alt+c",
         "mac": "cmd+alt+c"
+      },
+      {
+        "command": "hello-vscode.showFloatingInput",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "editorHasSelection"
       }
     ]
   },

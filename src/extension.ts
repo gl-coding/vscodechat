@@ -32,9 +32,15 @@ export function activate(context: vscode.ExtensionContext) {
         ChatPanel.createOrShow(context);
     });
 
+    // 添加悬浮输入命令
+    let floatingInput = vscode.commands.registerCommand('hello-vscode.showFloatingInput', () => {
+        FloatingInput.show(context);
+    });
+
     context.subscriptions.push(disposable);
     context.subscriptions.push(showSelection);
     context.subscriptions.push(openChat);
+    context.subscriptions.push(floatingInput);
 }
 
 export function deactivate() {}
@@ -167,10 +173,26 @@ class ChatPanel {
     }
   }
 
+  private async checkFileLock(editor: vscode.TextEditor): Promise<boolean> {
+    try {
+      await vscode.workspace.fs.stat(editor.document.uri);
+      return false;
+    } catch {
+      return true;
+    }
+  }
+
   private async insertToDocument(text: string) {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       vscode.window.showErrorMessage('没有打开的可编辑文件');
+      return;
+    }
+
+    // 检查文件锁定
+    const isLocked = await this.checkFileLock(editor);
+    if (isLocked) {
+      vscode.window.showErrorMessage('文件被其他进程锁定');
       return;
     }
 
@@ -294,11 +316,134 @@ if (config.get('autoInsert')) {
   // 执行插入操作
 } 
 
-const isLocked = await vscode.workspace.fs.readFile(document.uri)
-  .then(() => false)
-  .catch(() => true);
+class FloatingInput {
+  private static instance: FloatingInput | undefined;
+  private panel: vscode.WebviewPanel;
 
-if (isLocked) {
-  vscode.window.showErrorMessage('文件被其他进程锁定');
-  return;
+  static show(context: vscode.ExtensionContext) {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+
+    const selection = editor.selection;
+    const selectedText = editor.document.getText(selection);
+    const position = editor.selection.active;
+
+    if (!FloatingInput.instance) {
+      const panel = vscode.window.createWebviewPanel(
+        'floatingInput',
+        '快速输入',
+        { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
+        {
+          enableScripts: true,
+          retainContextWhenHidden: false
+        }
+      );
+
+      FloatingInput.instance = new FloatingInput(panel, context, selectedText, position);
+    } else {
+      FloatingInput.instance.updateContent(selectedText, position);
+    }
+  }
+
+  private constructor(
+    panel: vscode.WebviewPanel,
+    private context: vscode.ExtensionContext,
+    private selectedText: string,
+    private position: vscode.Position
+  ) {
+    this.panel = panel;
+    this.panel.webview.html = this.getWebviewContent();
+    
+    const inputElement = this.panel.webview.html.includes('input') ? 
+      this.panel.webview.html.split('input')[1] : null;
+    if (inputElement) {
+      this.panel.webview.onDidReceiveMessage(
+        message => {
+          if (message.command === 'submit') {
+            this.insertText(message.text);
+            this.panel.dispose();
+          }
+        },
+        undefined,
+        context.subscriptions
+      );
+    }
+  }
+
+  private getWebviewContent(): string {
+    const completions = ['function', 'const', 'let', 'var'];
+    const datalist = document.createElement('datalist');
+    datalist.id = 'completions';
+    completions.forEach(c => {
+      const option = document.createElement('option');
+      option.value = c;
+      datalist.appendChild(option);
+    });
+    document.body.appendChild(datalist);
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <style>
+        .floating-box {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: var(--vscode-editor-background);
+          padding: 15px;
+          border: 1px solid var(--vscode-editorWidget-border);
+          box-shadow: 0 2px 8px var(--vscode-widget-shadow);
+          border-radius: 4px;
+          z-index: 1000;
+        }
+        input {
+          width: 300px;
+          padding: 8px;
+          margin-right: 10px;
+          background: var(--vscode-input-background);
+          color: var(--vscode-input-foreground);
+          border: 1px solid var(--vscode-input-border);
+        }
+        button {
+          padding: 8px 16px;
+          background: var(--vscode-button-background);
+          color: var(--vscode-button-foreground);
+          border: none;
+          cursor: pointer;
+        }
+      </style>
+      <body>
+        <div class="floating-box">
+          <input id="input" list="completions" value="${this.selectedText}" autofocus />
+          <button onclick="submit()">确定</button>
+        </div>
+        <script>
+          const vscode = acquireVsCodeApi();
+          function submit() {
+            const input = document.getElementById('input').value;
+            vscode.postMessage({ 
+              command: 'submit',
+              text: input
+            });
+          }
+        </script>
+      </body>
+      </html>
+    `;
+  }
+
+  private async insertText(text: string) {
+    const editor = vscode.window.activeTextEditor;
+    if (editor) {
+      await editor.edit(editBuilder => {
+        editBuilder.replace(editor.selection, text);
+      });
+    }
+  }
+
+  private updateContent(newText: string, newPosition: vscode.Position) {
+    this.selectedText = newText;
+    this.position = newPosition;
+    this.panel.webview.html = this.getWebviewContent();
+  }
 } 
